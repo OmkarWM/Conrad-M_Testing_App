@@ -298,30 +298,30 @@ class BackendHardwareTest(QMainWindow):
             except: pass
 
         # --- X-RAY DATA LOGIC  ---
-        if script == "test_Xray.py" and "[DATA OUT]:" in data:
-            try:
+        # if script == "test_Xray.py" and "[DATA OUT]:" in data:
+        #     try:
                 
-                parts = data.split("]:")[1].strip().split()
+        #         parts = data.split("]:")[1].strip().split()
                 
-                if len(parts) >= 2:
-                    kv_val = parts[0]  # "kv"
-                    ma_val = parts[1]  # "ma"
-                    temp_val = parts[2]
+        #         if len(parts) >= 2:
+        #             kv_val = parts[0]  # "kv"
+        #             ma_val = parts[1]  # "ma"
+        #             temp_val = parts[2]
 
                     
-                    # Using str() ensures zeros stay if the DB column is TEXT
-                    self.db_execute(
-                        "UPDATE energy SET kv=?, ma=? WHERE num_grade=1", 
-                        (str(kv_val), str(ma_val))
-                    )
-                    self.db_execute(
-                        "UPDATE control SET temperature=? WHERE id=1", 
-                        (str(temp_val),) 
-                    )
+        #             # Using str() ensures zeros stay if the DB column is TEXT
+        #             self.db_execute(
+        #                 "UPDATE energy SET kv=?, ma=? WHERE num_grade=1", 
+        #                 (str(kv_val), str(ma_val))
+        #             )
+        #             self.db_execute(
+        #                 "UPDATE control SET temperature=? WHERE id=1", 
+        #                 (str(temp_val),) 
+        #             )
                     
        
-            except Exception as e:
-                print(f"X-ray Parse Error: {e} | Data: {data}")
+        #     except Exception as e:
+        #         print(f"X-ray Parse Error: {e} | Data: {data}")
 
     def safe_db_update(self, column, button):
         
