@@ -30,7 +30,8 @@ pins[SMPSMachineSTATUS]["value"] = 1
 pins[PowerSTATUS]["value"] = 1
 pins[UpsInpSTATUS]["value"] = 1
 
-stop_polling = threading.Event()
+# stop_polling = threading.Event()
+is_running = True
 
 try:
     ser = serial.Serial(PORT, BAUD, timeout=0.05)
@@ -63,10 +64,7 @@ def safety_check():
 def start_machine():
    
     # Safety gate
-    if (pins[SMPSMachineSTATUS]["value"] == 0 or pins[DoorsSTATUS]["value"] == 1 or 
-        pins[PowerSTATUS]["value"] == 0 or pins[UpsInpSTATUS]["value"] == 0 or 
-        pins[FlidSTATUS]["value"] == 1 or pins[RlidSTATUS]["value"] == 1 or 
-        pins[BlackButtonPIN]["value"] == 1):
+    if safety_check() == -1: 
         print("[ARDUINO] Start Aborted: Safety Interlock Active")
         return
     
@@ -83,7 +81,9 @@ def start_machine():
     # pins[RejectionConPIN]["value"] = 1; pins[RejectionConSTATUS]["value"] = 1
     # print("[ARDUINO] Machine fully operational.")
 
-def stop_machine():   
+def stop_machine():
+    global is_running
+    is_running = False   
     print("[ARDUINO] Stopping Machine...")
     pins[FeederPIN]["value"] = 0; pins[FeederSTATUS]["value"] = 0
     time.sleep(0.5)
@@ -94,6 +94,8 @@ def stop_machine():
     pins[XrayPIN]["value"] = 0; pins[XraySTATUS]["value"] = 0
     time.sleep(0.5)
     pins[ConveyorPIN]["value"] = 0; pins[ConveyorSTATUS]["value"] = 0
+
+    return "EXIT"
     # print("[ARDUINO] Machine Safely Stopped.")
 
 def process_command(cmd):
@@ -126,34 +128,35 @@ def process_command(cmd):
 
 # --- CONTINUOUS STATUS THREAD FOR ARDUINO ---
 def status_thread():
-    while True:
-        # if not stop_polling.is_set():
-            is_ok = safety_check()
-            if is_ok == -1:
-                print("is_ok:",is_ok)
-                break
+    global is_running
+    while is_running:
+        if safety_check() == -1:
+            stop_machine()
+            break
             
                       
             # Construct the status bitstring
-            current_bits = "".join(str(pins[p]["value"]) for p in STATUS_PIN_MAP)
-            
-            print(f"\r[LIVE BITS]: {current_bits} | Monitoring COM6...", end="", flush=True)
-            
-            # Check for incoming commands (like "getStatus" from the Bridge)
-            if ser.in_waiting > 0:
-                try:
-                    raw_data = ser.readline().decode().strip()
-                    
-                    # If bridge asks for status, send it back immediately
-                    if raw_data == "getStatus":
-                        send_to_com(f"BITS:{current_bits}")
-                    else:
-                        process_command(raw_data)
-                except:
-                    pass
-            
+        current_bits = "".join(str(pins[p]["value"]) for p in STATUS_PIN_MAP)
         
-            time.sleep(1) # Faster polling for better responsiveness
+        print(f"\r[LIVE BITS]: {current_bits} | Monitoring COM6...", end="", flush=True)
+        
+        # Check for incoming commands (like "getStatus" from the Bridge)
+        if ser.in_waiting > 0:
+            try:
+                raw_data = ser.readline().decode().strip()
+                
+                # If bridge asks for status, send it back immediately
+                if raw_data == "getStatus":
+                    send_to_com(f"BITS:{current_bits}")
+                else:
+                    action_result = process_command(raw_data)
+                    if action_result == "EXIT":                       
+                        break
+            except:
+                pass
+        
+    
+        time.sleep(1) # Faster polling for better responsiveness
 # --- MAIN RUNTIME ---
 if __name__ == "__main__":
     print(f"--- Virtual Arduino Mega Active on {PORT} ---")
