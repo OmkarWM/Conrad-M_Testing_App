@@ -1,8 +1,8 @@
-import sys, os, sqlite3
+import sys, os, sqlite3, shutil, time
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QGridLayout, QPushButton, QLabel, 
-                             QFrame, QPlainTextEdit, QMenu)
-from PyQt6.QtCore import Qt, QProcess
+                             QFrame, QPlainTextEdit, QMenu, QFileDialog, QLineEdit)
+from PyQt6.QtCore import Qt, QProcess, QTimer 
 from PyQt6.QtGui import QAction
 
 class BackendHardwareTest(QMainWindow):
@@ -15,10 +15,18 @@ class BackendHardwareTest(QMainWindow):
         self.package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
         self.db_path = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "db.sqlite")
         self.cmd_file = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "mega_cmd.txt")
+        #default path
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.source_dir = os.path.join(self.base_dir, "Source_Images")
+        self.dest_dir = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "Saved_Images")
+        self.monitor_timer = QTimer()
+        self.monitor_timer.timeout.connect(self.img_monitor_transfer)
         
         self.active_processes = []
         self.controls = {}
         self.terminals = {}
+        self.copied_files = []
+ 
         
         # Split mapping: Each script routes to its own specific terminal
         self.process_map = {
@@ -39,6 +47,22 @@ class BackendHardwareTest(QMainWindow):
         except Exception as e:
             print(f"DB Error: {e}")
             return None
+        
+    def select_folder(self, folder_type):
+        
+        new_path = QFileDialog.getExistingDirectory(self, "Select Location", self.base_dir)
+        
+        if new_path:
+            if folder_type == "src":
+                # Keeps "Source_Images" but changes the parent path
+                self.source_dir = os.path.join(new_path, "Source_Images")
+                self.src_input.setText(self.source_dir)
+            else:
+                # Keeps "Saved_Images" but changes the parent path
+                self.dest_dir = os.path.join(new_path, "Saved_Images")
+                self.dst_input.setText(self.dest_dir)
+                
+            self.terminals["mega_bridge"].appendPlainText(f"[CONFIG] Path updated to new path: {new_path}")
 
     def init_ui(self):
         self.setStyleSheet("""
@@ -120,11 +144,81 @@ class BackendHardwareTest(QMainWindow):
 
         sidebar.addStretch()
 
-        reset_btn = QPushButton("RESET MACHINE")
-        reset_btn.setFixedHeight(50)
-        reset_btn.setStyleSheet("background: transparent; color: #22d3ee; border: 2px solid #22d3ee; border-radius: 12px; font-weight: bold;")
-        reset_btn.clicked.connect(self.manual_reset)
-        sidebar.addWidget(reset_btn)
+        # --- PATH CONFIGURATION PANEL ---
+        path_panel = QFrame()
+        path_panel.setStyleSheet("""
+            QFrame { 
+                background-color: #020617; 
+                border: 1px solid #1e293b; 
+                border-radius: 12px; 
+            }
+            QLabel { 
+                color: #22d3ee; 
+                font-size: 10px; 
+                letter-spacing: 1px; 
+                border: none;
+                background: transparent;
+            }
+            QLineEdit {
+                background-color: #020617;
+                color: #f8fafc; 
+                border: 1px solid #334155;
+                border-radius: 4px;
+                padding: 8px; 
+                font-family: 'Consolas';
+                font-size: 11px; 
+            }           
+            QPushButton {
+                background-color: #1e293b;
+                color: #f8fafc;
+                border-radius: 6px;
+                font-size: 9px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #334155;
+                border: 1px solid #22d3ee;
+            }
+        """)
+        
+        path_layout = QVBoxLayout(path_panel)
+        path_layout.setSpacing(8)
+
+        # Source Configuration
+        path_layout.addWidget(QLabel("STORAGE SOURCE"))
+        self.src_input = QLineEdit(self.source_dir)
+        self.src_input.setReadOnly(True)
+        path_layout.addWidget(self.src_input)
+        
+        src_btn = QPushButton("SELECT SOURCE")
+        src_btn.setFixedHeight(28)
+        src_btn.clicked.connect(lambda: self.select_folder("src"))
+        path_layout.addWidget(src_btn)
+
+        # Separator Line
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setStyleSheet("background-color: #1e293b;")
+        path_layout.addWidget(line)
+
+        # Destination Configuration
+        path_layout.addWidget(QLabel("STORAGE DESTINATION"))
+        self.dst_input = QLineEdit(self.dest_dir)
+        self.dst_input.setReadOnly(True)
+        path_layout.addWidget(self.dst_input)
+        
+        dst_btn = QPushButton("SELECT DESTINATION")
+        dst_btn.setFixedHeight(28)
+        dst_btn.clicked.connect(lambda: self.select_folder("dst"))
+        path_layout.addWidget(dst_btn)
+
+        sidebar.addWidget(path_panel)
+
+        # reset_btn = QPushButton("RESET MACHINE")
+        # reset_btn.setFixedHeight(50)
+        # reset_btn.setStyleSheet("background: transparent; color: #22d3ee; border: 2px solid #22d3ee; border-radius: 12px; font-weight: bold;")
+        # reset_btn.clicked.connect(self.manual_reset)
+        # sidebar.addWidget(reset_btn)
 
         self.err_btn = QPushButton("TRIGGER FAULT")
         self.err_btn.setFixedHeight(50)
@@ -161,16 +255,17 @@ class BackendHardwareTest(QMainWindow):
                 self.kill_script(s)
             self.reset_ui_buttons()
             self.terminals["mega_bridge"].appendPlainText(f"\n[!!!] CRITICAL FAULT: {message}")
+            self.monitor_timer.stop()
         except Exception as e:
             print(f"Fault Error: {e}")
 
-    def manual_reset(self):
-        try:
-            commands = ["setPin 49 1", "setPin 34 0", "setPin 37 0", "setPin 35 0"]
-            with open(self.cmd_file, "w") as f:
-                f.write("\n".join(commands))
-            self.terminals["mega_bridge"].appendPlainText("> [SYSTEM] Hardware reset successful.")
-        except: pass
+    # def manual_reset(self):
+    #     try:
+    #         commands = ["setPin 49 1", "setPin 34 0", "setPin 37 0", "setPin 35 0"]
+    #         with open(self.cmd_file, "w") as f:
+    #             f.write("\n".join(commands))
+    #         self.terminals["mega_bridge"].appendPlainText("> [SYSTEM] Hardware reset successful.")
+    #     except: pass
 
     def toggle_testing(self):
         if self.test_btn.text() == "START TESTING":
@@ -189,6 +284,7 @@ class BackendHardwareTest(QMainWindow):
 
         # --- MEGA LOGIC ---
         if script == "test_Mega.py" and "[LIVE BITS]:" in data:
+            # self.img_monitor_transfer()
             try:
                 res = self.db_execute("SELECT state, feeder FROM control WHERE id=1", fetch=True)
                 if res and res[0] == 1:
@@ -264,15 +360,42 @@ class BackendHardwareTest(QMainWindow):
             color = "#eab308" if column == "state" else "#a855f7"
             button.setText("STOP MACHINE" if column == "state" else "FEEDER OFF")
             button.setStyleSheet(f"background-color:{color}; color:black; border-radius:15px; font-weight:bold;")
+            
+            if column == "state":
+                for path in [self.source_dir, self.dest_dir]:
+                    if not os.path.exists(path):
+                        os.makedirs(path)
+                self.copied_files = []
+                self.monitor_timer.start(400)
+                # self.img_monitor_transfer()
         else:
             button.setText("START MACHINE" if column == "state" else "FEEDER ON")
             button.setStyleSheet("background-color:#334155; color:white; border-radius:15px; font-weight:bold;")
+            self.monitor_timer.stop()
             if column == "feeder":
                 self.kill_script("uno_bridge.py"); self.kill_script("test_Uno.py")
             if column == "state":
                 self.db_execute("UPDATE control SET xray=0, feeder=0 WHERE id=1")
                 for s in ["xray_bridge.py", "test_Xray.py", "uno_bridge.py", "test_Uno.py"]: self.kill_script(s)
                 self.reset_ui_buttons()
+
+    def img_monitor_transfer(self):
+
+        try:
+            all_files = os.listdir(self.source_dir)
+            # Find the first file that hasn't been copied yet
+            new_files = [f for f in all_files if f not in self.copied_files]
+            
+            if new_files:
+                f = new_files[0]
+                src_path = os.path.join(self.source_dir, f)
+                dst_path = os.path.join(self.dest_dir, f)
+                
+                shutil.copy(src_path, dst_path)
+                self.copied_files.append(f) # Mark as done
+                self.terminals["mega_bridge"].appendPlainText(f"[STORAGE] Copied: {f}")
+        except Exception as e:
+            print(f"Copy Error: {e}")
 
     def kill_script(self, name):
         for p in self.active_processes[:]:
