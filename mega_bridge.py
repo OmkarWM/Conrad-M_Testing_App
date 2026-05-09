@@ -1,4 +1,4 @@
-import serial
+import serial, sys
 import sqlite3
 import time
 import os
@@ -10,7 +10,21 @@ DB_PATH = os.path.join(local_app_data, "Packages", package_folder, "LocalState",
 # Absolute path to the LocalState folder
 CMD_FILE = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "mega_cmd.txt")
 
-BRIDGE_PORT = 'COM7' 
+def get_config_port(line_index, default_fallback):
+    try:
+        # Get the path of the script directory
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(base_path, "port_config.txt")
+        
+        with open(config_path, "r") as f:
+            lines = f.readlines()
+            # Return the specific port for this script
+            return lines[line_index].strip()
+    except Exception:
+        # If file is missing or line doesn't exist, use the fallback
+        print(f"Config not found. Falling back to {default_fallback}")
+        return default_fallback
+BRIDGE_PORT = get_config_port(1, "COM7")
 BAUD = 9600
 
 def db_query(query, params=(), fetch=False):
@@ -92,7 +106,7 @@ def run_bridge():
                         ser.write(b"ResumeNormalMode\n")
                         print("[BRIDGE] Startup Mode: NORMAL")
                 elif state == 0 and last_state == 1:
-                    print(last_state)
+                    # print(last_state)
                     ser.write(b"StopMachine\n")
                     print("\n [BRIDGE] Sent: StopMachine")
                              

@@ -1,11 +1,25 @@
-import serial
+import serial, os
 import threading
 import time
 import sys
 
 # --- CONFIGURATION ---
-# Set this to the other end of your virtual pair (e.g., COM6 if Bridge is on COM7)
-PORT = 'COM6'  
+def get_config_port(line_index, default_fallback):
+    try:
+        # Get the path of the script directory
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(base_path, "port_config.txt")
+        
+        with open(config_path, "r") as f:
+            lines = f.readlines()
+            # Return the specific port for this script
+            return lines[line_index].strip()
+    except Exception:
+        # If file is missing or line doesn't exist, use the fallback
+        print(f"Config not found. Falling back to {default_fallback}")
+        return default_fallback
+
+PORT = get_config_port(0, "COM6") 
 BAUD = 9600
 NUM_PINS = 70
 
@@ -138,7 +152,7 @@ def status_thread():
             # Construct the status bitstring
         current_bits = "".join(str(pins[p]["value"]) for p in STATUS_PIN_MAP)
         
-        print(f"\r[LIVE BITS]: {current_bits} | Monitoring COM6...", end="", flush=True)
+        print(f"\r[LIVE BITS]: {current_bits} | Monitoring {PORT}...", end="", flush=True)
         
         # Check for incoming commands (like "getStatus" from the Bridge)
         if ser.in_waiting > 0:
