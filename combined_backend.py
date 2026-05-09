@@ -26,6 +26,7 @@ class BackendHardwareTest(QMainWindow):
         self.controls = {}
         self.terminals = {}
         self.copied_files = []
+        self.index = 0
  
         
         # Split mapping: Each script routes to its own specific terminal
@@ -365,7 +366,8 @@ class BackendHardwareTest(QMainWindow):
                 for path in [self.source_dir, self.dest_dir]:
                     if not os.path.exists(path):
                         os.makedirs(path)
-                self.copied_files = []
+                # self.copied_files = []
+                self.index = 0
                 self.monitor_timer.start(400)
                 # self.img_monitor_transfer()
         else:
@@ -382,20 +384,19 @@ class BackendHardwareTest(QMainWindow):
     def img_monitor_transfer(self):
 
         try:
-            all_files = os.listdir(self.source_dir)
-            # Find the first file that hasn't been copied yet
-            new_files = [f for f in all_files if f not in self.copied_files]
-            
-            if new_files:
-                f = new_files[0]
-                src_path = os.path.join(self.source_dir, f)
-                dst_path = os.path.join(self.dest_dir, f)
+            filename = f"CH0_M2_file_{str(self.index)}"
+            if os.path.exists(os.path.join(self.source_dir, filename + ".txt")):
+                shutil.copy(os.path.join(self.source_dir, filename + ".txt"), os.path.join(self.dest_dir, filename + ".txt"))
+                time.sleep(0.001)
+                if os.path.exists(os.path.join(self.source_dir, filename + ".tif")):
+                    shutil.copy(os.path.join(self.source_dir, filename + ".tif"), os.path.join(self.dest_dir, filename + ".tif"))
+                    self.terminals["mega_bridge"].appendPlainText(f"[STORAGE] Copied: {filename + ".tif"}")
+                    self.index += 1
+
                 
-                shutil.copy(src_path, dst_path)
-                self.copied_files.append(f) # Mark as done
-                self.terminals["mega_bridge"].appendPlainText(f"[STORAGE] Copied: {f}")
         except Exception as e:
             print(f"Copy Error: {e}")
+            self.stop_all_testing()
 
     def kill_script(self, name):
         for p in self.active_processes[:]:
@@ -415,7 +416,20 @@ class BackendHardwareTest(QMainWindow):
 
     def stop_all_testing(self):
         self.db_execute("UPDATE control SET state=0, feeder=0, xray=0 WHERE id=1")
-        # self.manual_reset()
+        # self.manual_reset()\
+
+        if os.path.exists(self.source_dir):
+            try:
+                for f in os.listdir(self.source_dir):
+                    f_path = os.path.join(self.source_dir, f)
+                    # Only delete if it's a file, not a subdirectory
+                    if os.path.isfile(f_path): 
+                        os.remove(f_path)
+                        self.terminals["mega_bridge"].appendPlainText("Source directory cleared.")
+    
+            except Exception as e:
+                self.terminals["mega_bridge"].appendPlainText(f"Error clearing source: {e}")
+                
         for p in self.active_processes: p.kill()
         self.active_processes = []
         self.test_btn.setText("START TESTING")

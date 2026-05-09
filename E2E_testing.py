@@ -1,8 +1,8 @@
-import sys, os, sqlite3, shutil, random
+import sys, os, sqlite3, shutil, time
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QGridLayout, QPushButton, QLabel, 
-                             QFrame, QPlainTextEdit, QStackedWidget, QLineEdit, QFileDialog, QMenu)
+                             QFrame, QPlainTextEdit, QLineEdit, QFileDialog, QMenu)
 from PyQt6.QtCore import Qt, QTimer, QProcess
 from PyQt6.QtGui import QAction
 
@@ -24,13 +24,13 @@ class ModularTestingBench(QMainWindow):
         
         self.source_dir = os.path.join(self.base_dir, "Source_Images")
         self.dest_dir = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "Cropped")
-        
+        self.index = 0
         # Initializing core state variables
         self.phase = "READY"
         self.is_sim_active = False
         self.ses_id = 0        
         self.good, self.bad, self.forced_good = 0, 0, 0
-        self.copied_files = []
+        # self.copied_files = []
         self.active_processes = []
         self.terminals = {}
 
@@ -98,14 +98,14 @@ class ModularTestingBench(QMainWindow):
         rack_lay.addWidget(QLabel("SOURCE FOLDER"))
         self.src_in = QLineEdit(self.source_dir); self.src_in.setReadOnly(True)
         rack_lay.addWidget(self.src_in)
-        btn_path = QPushButton("BROWSE SOURCE "); btn_path.clicked.connect(self.select_path)
+        btn_path = QPushButton("BROWSE SOURCE "); btn_path.clicked.connect(self.select_source_path)
         rack_lay.addWidget(btn_path)
 
         rack_lay.addSpacing(20) 
         rack_lay.addWidget(QLabel("DESTINATION  FOLDER"))
         self.dest_in = QLineEdit(self.dest_dir); self.dest_in.setReadOnly(True)
         rack_lay.addWidget(self.dest_in)
-        btn_path = QPushButton("BROWSE DESTINATION "); btn_path.clicked.connect(self.select_path)
+        btn_path = QPushButton("BROWSE DESTINATION "); btn_path.clicked.connect(self.select_dest_path)
         rack_lay.addWidget(btn_path)
 
         rack_lay.addSpacing(20) 
@@ -163,9 +163,9 @@ class ModularTestingBench(QMainWindow):
         # This handles the internal state machine and HMI interaction
         if not self.is_sim_active: return
 
-        row = self.db_execute("SELECT dialog, state, feeder FROM control WHERE id=1", fetch=True)
+        row = self.db_execute("SELECT dialog, state FROM control WHERE id=1", fetch=True)
         if not row: return
-        dialog, state, feeder_on = row
+        dialog, state  = row
 
         # Waiting for the user to confirm the HMI setup dialog
         if self.phase == "READY" and dialog == 1:
@@ -177,6 +177,8 @@ class ModularTestingBench(QMainWindow):
             self.phase = "RUNNING"
             res_ses = self.db_execute("SELECT MAX(ses) FROM machineStatus", fetch=True)
             self.ses_id = res_ses[0] if (res_ses and res_ses[0] is not None) else 1
+            # self.copied_files = []
+            self.index = 0
             self.good, self.bad, self.forced_good = 0, 0, 0
             self.db_execute("UPDATE control SET pls_wait=1, dialog=0 WHERE id=1")
             self.stream_engine.start(400)
@@ -199,13 +201,24 @@ class ModularTestingBench(QMainWindow):
     def run_stream_cycle(self):
         # Simulates image processing by copying files from source to destination
         try:
-            files = [f for f in os.listdir(self.source_dir) if f not in self.copied_files]
-            if files:
-                f = files[0]
-                shutil.copy(os.path.join(self.source_dir, f), os.path.join(self.dest_dir, f))
-                self.copied_files.append(f) 
-                self.log(f"Simulated IO: {f} transferred.")
-        except: pass
+            # files = [f for f in os.listdir(self.source_dir) if f not in self.copied_files]
+            filename = f"CH0_M2_file_{str(self.index)}"
+            if os.path.exists(os.path.join(self.source_dir, filename + ".txt")):
+                shutil.copy(os.path.join(self.source_dir, filename + ".txt"), os.path.join(self.dest_dir, filename + ".txt"))
+                time.sleep(0.001)
+                if os.path.exists(os.path.join(self.source_dir, filename + ".tif")):
+                    shutil.copy(os.path.join(self.source_dir, filename + ".tif"), os.path.join(self.dest_dir, filename + ".tif"))
+                    self.log(f"Simulated IO: {filename+ ".tif"} transferred.")
+                    self.index += 1
+
+            # if files:
+            #     f = files[0]
+            #     shutil.copy(os.path.join(self.source_dir, f), os.path.join(self.dest_dir, f))
+            #     self.copied_files.append(f) 
+            
+        except Exception as e:
+            self.log(f"Stream Error: {e}")
+            self.stop_all_testing()
 
     def start_scripts(self, script_list):
         # Launches external bridge/serial simulator scripts as subprocesses
@@ -246,7 +259,7 @@ class ModularTestingBench(QMainWindow):
                 
                 res = self.db_execute("SELECT state, feeder, sensitivity FROM control WHERE id=1", fetch=True)
                 if res and res[0] == 1:
-                    # Dynamically start/stop X-Ray simulator based on conveyor bit
+                    # Dynamically start/stop X-Ray simulator based on xray bit
                     if len(bits) > 2 and bits[2] == "1":
                         if "xray_bridge.py" not in running_scripts:
                             self.db_execute("UPDATE control SET xray=1 WHERE id=1")
@@ -336,6 +349,17 @@ class ModularTestingBench(QMainWindow):
 
         self.db_execute("UPDATE control SET temperature=0, xray=0 WHERE id=1")
         self.db_execute("UPDATE machineStatus SET x_ray='OFF', camera='OFF', conveyor='OFF', feeder='OFF' WHERE ses=?", (self.ses_id,))
+
+        if os.path.exists(self.source_dir):
+            try:
+                for f in os.listdir(self.source_dir):
+                    f_path = os.path.join(self.source_dir, f)
+                    # Only delete if it's a file, not a subdirectory
+                    if os.path.isfile(f_path): 
+                        os.remove(f_path)
+                self.log("Source directory cleared.")
+            except Exception as e:
+                self.log(f"Error clearing source: {e}")
         
         # Kill all running bridges
         for p in self.active_processes: p.kill()
@@ -398,10 +422,29 @@ class ModularTestingBench(QMainWindow):
 
     def log(self, m): self.master_log.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] {m}")
 
-    def select_path(self):
-        # Folder selection logic
+    def select_source_path(self):
+    # Opens dialog to pick the parent folder
         p = QFileDialog.getExistingDirectory(self, "Select Root", self.base_dir)
-        if p: self.source_dir = os.path.join(p, "Source_Images"); self.src_in.setText(self.source_dir)
+        if p: 
+            self.source_dir = os.path.join(p, "Source_Images")
+            
+            # Physically create the folder if it doesn't exist yet
+            if not os.path.exists(self.source_dir):
+                os.makedirs(self.source_dir)
+                
+            self.src_in.setText(self.source_dir)
+
+    def select_dest_path(self):
+        # Opens dialog to pick the parent folder
+        p = QFileDialog.getExistingDirectory(self, "Select Root", self.base_dir)
+        if p: 
+            self.dest_dir = os.path.join(p, "Cropped")
+            
+            # Physically create the folder if it doesn't exist yet
+            if not os.path.exists(self.dest_dir):
+                os.makedirs(self.dest_dir)
+                
+            self.dest_in.setText(self.dest_dir)
 
     def db_execute(self, query, params=(), fetch=False):
         try:
