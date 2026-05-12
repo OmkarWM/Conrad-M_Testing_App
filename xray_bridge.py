@@ -37,7 +37,7 @@ BAUD = 9600
 def run_xray_bridge():
     try:
         ser = serial.Serial(BRIDGE_PORT, BAUD, timeout=0.1)
-        print(f"--- X-Ray Automated Bridge Active on {BRIDGE_PORT} ---")
+        print(f"--- Virtual X-Ray Controller Bridge Active on {BRIDGE_PORT} ---")
     except Exception as e:
         print(f"Connection Error: {e}"); return
 

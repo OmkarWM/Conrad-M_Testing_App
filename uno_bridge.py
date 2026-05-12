@@ -26,7 +26,7 @@ HEX_COMMANDS = [0xA1, 0xB1, 0xC1, 0xD1, 0xE1, 0xF1, 0xF2, 0xF3, 0xF4]
 def run_bridge():
     try:
         ser = serial.Serial(BRIDGE_PORT, BAUD, timeout=0.1)
-        print("--- Uno Bridge: Active---")
+        print(f"--- Virtual Arduino Uno Bridge Active on {BRIDGE_PORT}---")
     except Exception as e:
         print(f"Bridge Error: {e}"); return
 

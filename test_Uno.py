@@ -24,7 +24,7 @@ class UnoSimulator:
     def __init__(self):
         try:
             self.ser = serial.Serial(PORT, BAUD, timeout=0.1)
-            print(f"--- Uno Simulator Active on {PORT} ---")
+            print(f"--- Virtual Arduino Uno  Active on {PORT} ---")
         except Exception as e:
             print(f"Connection Error: {e}")
             exit()
