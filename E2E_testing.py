@@ -15,15 +15,26 @@ class ModularTestingBench(QMainWindow):
         # Setup paths for the Windows App Package environment
         local_app_data = os.environ.get('LOCALAPPDATA', '')
         package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
-        self.db_path = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+        # self.db_path = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+        def get_db_path():
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
+            if os.path.exists(config_file):
+                with open(config_file, "r") as f:
+                    lines = f.read().splitlines()
+                    if len(lines) >= 7:
+                        return lines[6]
+            return None
+
+        self.db_path = get_db_path()
+        print(f"Using database at: {self.db_path}")
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         
         # Communication files for the bridge and local fault tracking
         self.cmd_file = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "mega_cmd.txt")
         self.state_file = os.path.join(self.base_dir, "fault_state.txt")
         
-        self.source_dir = os.path.join(self.base_dir, "Source_Images")
-        self.dest_dir = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "Cropped")
+        self.source_dir = os.path.join(self.base_dir)
+        self.dest_dir = os.path.join(local_app_data, "Packages", package_folder, "LocalState")
         self.index = 0
         # Initializing core state variables
         self.phase = "READY"
@@ -350,16 +361,16 @@ class ModularTestingBench(QMainWindow):
         self.db_execute("UPDATE control SET temperature=0, xray=0 WHERE id=1")
         self.db_execute("UPDATE machineStatus SET x_ray='OFF', camera='OFF', conveyor='OFF', feeder='OFF' WHERE ses=?", (self.ses_id,))
 
-        if os.path.exists(self.source_dir):
-            try:
-                for f in os.listdir(self.source_dir):
-                    f_path = os.path.join(self.source_dir, f)
-                    # Only delete if it's a file, not a subdirectory
-                    if os.path.isfile(f_path): 
-                        os.remove(f_path)
-                self.log("Source directory cleared.")
-            except Exception as e:
-                self.log(f"Error clearing source: {e}")
+        # if os.path.exists(self.source_dir):
+        #     try:
+        #         for f in os.listdir(self.source_dir):
+        #             f_path = os.path.join(self.source_dir, f)
+        #             # Only delete if it's a file, not a subdirectory
+        #             if os.path.isfile(f_path): 
+        #                 os.remove(f_path)
+        #         self.log("Source directory cleared.")
+        #     except Exception as e:
+        #         self.log(f"Error clearing source: {e}")
         
         # Kill all running bridges
         for p in self.active_processes: p.kill()
@@ -426,7 +437,7 @@ class ModularTestingBench(QMainWindow):
     # Opens dialog to pick the parent folder
         p = QFileDialog.getExistingDirectory(self, "Select Root", self.base_dir)
         if p: 
-            self.source_dir = os.path.join(p, "Source_Images")
+            self.source_dir = os.path.join(p)
             
             # Physically create the folder if it doesn't exist yet
             if not os.path.exists(self.source_dir):
@@ -438,7 +449,7 @@ class ModularTestingBench(QMainWindow):
         # Opens dialog to pick the parent folder
         p = QFileDialog.getExistingDirectory(self, "Select Root", self.base_dir)
         if p: 
-            self.dest_dir = os.path.join(p, "Cropped")
+            self.dest_dir = os.path.join(p)
             
             # Physically create the folder if it doesn't exist yet
             if not os.path.exists(self.dest_dir):
