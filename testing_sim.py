@@ -2,8 +2,9 @@ import sys
 import os
 import subprocess
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, 
-                             QVBoxLayout, QPushButton, QLabel, QFrame, QHBoxLayout, QComboBox, QGridLayout)
-from PyQt6.QtCore import Qt
+                             QVBoxLayout, QPushButton, QLabel, QFrame, QHBoxLayout, 
+                             QComboBox, QGridLayout, QFileDialog, QLineEdit)
+from PyQt6.QtCore import QTimer
 
 class MasterLauncher(QMainWindow):
     def __init__(self):
@@ -21,6 +22,9 @@ class MasterLauncher(QMainWindow):
 
         self.apply_styles()
 
+        self.monitor_timer = QTimer()
+        self.monitor_timer.timeout.connect(self.check_process_status)
+
         main_container = QWidget()
         self.setCentralWidget(main_container)
         layout = QVBoxLayout(main_container)
@@ -31,6 +35,30 @@ class MasterLauncher(QMainWindow):
         self.tabs.addTab(self.create_tab("Front-End", "Test_Case-Sim.py"), "Front-End")
         self.tabs.addTab(self.create_tab("Back-End", "combined_backend.py"), "Back-End")
         self.tabs.addTab(self.create_tab("End-to-End", "E2E_testing.py"), "End-2-End")
+
+        db_section = QFrame()
+        db_section.setStyleSheet("background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; margin-top: 5px;")
+        db_layout = QVBoxLayout(db_section)
+        
+        db_header = QLabel(" Database Configuration")
+        db_header.setStyleSheet("color: #10b981; font-weight: bold; letter-spacing: 1px;")
+        db_layout.addWidget(db_header)
+
+        db_input_row = QHBoxLayout()
+        self.db_path_edit = QLineEdit()
+        self.db_path_edit.setReadOnly(True)
+        self.db_path_edit.setPlaceholderText("Select Database File...")
+        self.db_path_edit.setStyleSheet("background: #2d2d2d; color: #fff; padding: 5px; border: 1px solid #444;")
+        
+        browse_btn = QPushButton("BROWSE")
+        browse_btn.setFixedSize(100, 28)
+        browse_btn.setStyleSheet("background-color: #334155; font-size: 10px;")
+        browse_btn.clicked.connect(self.select_db_path)
+        
+        db_input_row.addWidget(self.db_path_edit)
+        db_input_row.addWidget(browse_btn)
+        db_layout.addLayout(db_input_row)
+        layout.addWidget(db_section)
 
         config_box = QFrame()
         config_box.setStyleSheet("background-color: #161616; border-top: 1px solid #333; border-radius: 8px;")
@@ -80,7 +108,8 @@ class MasterLauncher(QMainWindow):
                 self.selectors["x_sr"].currentText(), # Line 2
                 self.selectors["x_br"].currentText(), # Line 3
                 self.selectors["u_sr"].currentText(), # Line 4
-                self.selectors["u_br"].currentText()  # Line 5
+                self.selectors["u_br"].currentText(),
+                self.db_path_edit.text()  # Line 5
             ]
             with open(self.config_path, "w") as f:
                 f.write("\n".join(port_data))
@@ -107,17 +136,15 @@ class MasterLauncher(QMainWindow):
         dot = QLabel("●"); dot.setStyleSheet("color: #333; font-size: 18px;") 
         msg = QLabel("Ready to Launch"); msg.setStyleSheet("font-size: 12px; color: #aaa;")
         status_lay.addWidget(dot); status_lay.addWidget(msg); status_lay.addStretch()
-        btn = QPushButton(f"RUN {title.upper()}"); btn.setFixedHeight(40)
+        btn = QPushButton(f"RUN {title.upper()} TEST"); btn.setFixedHeight(40);
         self.buttons.append(btn)
-        btn.clicked.connect(lambda checked, n=script_name, m=msg, d=dot, b=btn: self.handle_module(n, m, d, b))
+        btn.clicked.connect(lambda checked, t=title, n=script_name, m=msg, d=dot, b=btn: self.handle_module(t, n, m, d, b))
         layout.addWidget(status_box); layout.addWidget(btn)
         return tab
 
-    def handle_module(self, name, msg_label, dot_label, current_btn):
+    def handle_module(self, title, name, msg_label, dot_label, current_btn):
         if self.is_any_module_running and current_btn.text().startswith("STOP"):
             if self.active_process: self.active_process.terminate()
-            self.is_any_module_running = False
-            self.reset_ui()
             return
 
         if not self.is_any_module_running:
@@ -129,7 +156,7 @@ class MasterLauncher(QMainWindow):
                 self.active_process = subprocess.Popen([sys.executable, name])
                 self.is_any_module_running = True
                 
-                msg_label.setText(f"{name} is Running")
+                msg_label.setText(f"{title} Test is Running")
                 msg_label.setStyleSheet("color: #00ff00; font-weight: bold;")
                 dot_label.setStyleSheet("color: #00ff00;")
                 current_btn.setText(f"STOP {current_btn.text().replace('RUN ', '')}")
@@ -137,17 +164,38 @@ class MasterLauncher(QMainWindow):
                 
                 for b in self.buttons:
                     if b != current_btn: b.setEnabled(False)
+                self.monitor_timer.start(500)
+
             except:
                 msg_label.setText("Launch Error")
+
+    
+    def check_process_status(self):
+        """Checks if the external script has been closed"""
+        if self.active_process and self.active_process.poll() is not None:
+            self.monitor_timer.stop()
+            self.active_process = None
+            self.is_any_module_running = False
+            self.reset_ui()
 
     def reset_ui(self):
         for b in self.buttons:
             if b.text().startswith("STOP"): b.setText(b.text().replace("STOP ", "RUN "))
             b.setEnabled(True); b.setStyleSheet("")
-        for label in self.tabs.currentWidget().findChildren(QLabel):
-            if label.text() == "●": label.setStyleSheet("color: #333; font-size: 18px;")
-            elif "Running" in label.text() or label.text() == "Ready to Launch":
-                label.setText("Ready to Launch"); label.setStyleSheet("font-size: 12px; color: #aaa;")
+
+        for i in range(self.tabs.count()):
+            tab_widget = self.tabs.widget(i)
+            for label in tab_widget.findChildren(QLabel):
+                if label.text() == "●": label.setStyleSheet("color: #333; font-size: 18px;")
+                elif "Running" in label.text() or label.text() == "Ready to Launch":
+                    label.setText("Ready to Launch"); label.setStyleSheet("font-size: 12px; color: #aaa;")
+
+    def select_db_path(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Database File", "", "Database Files (*.db *.sqlite *.sql);;All Files (*)")
+        if file_path:
+            self.db_path_edit.setText(file_path)
+            self.save_ports_to_txt()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv); win = MasterLauncher(); win.show(); sys.exit(app.exec())
