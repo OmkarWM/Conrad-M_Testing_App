@@ -9,7 +9,7 @@ from PyQt6.QtGui import QAction
 class ModularTestingBench(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CONRAD-M | MODULAR TESTING BENCH v5.0")
+        self.setWindowTitle("CONRAD-M | MODULAR TESTING BENCH ")
         self.setFixedSize(1280, 720)
         
         # Setup paths for the Windows App Package environment
