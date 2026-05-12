@@ -10,15 +10,28 @@ class BackendHardwareTest(QMainWindow):
         super().__init__()
         self.setWindowTitle("Backend-Testing GUI")
         self.setFixedSize(1400, 900)
-        
+
+        def get_db_path():
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, "r") as f:
+                        lines = f.read().splitlines()
+                        if len(lines) >= 7 and lines[6].strip():
+                            return lines[6].strip()
+                except Exception:
+                    pass
+            return ""
+                
         self.local_app_data = os.environ.get('LOCALAPPDATA', '')
         self.package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
-        self.db_path = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "db.sqlite")
+        # self.db_path = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "db.sqlite")
+        self.db_path = get_db_path()
         self.cmd_file = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "mega_cmd.txt")
         #default path
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.source_dir = os.path.join(self.base_dir, "Source_Images")
-        self.dest_dir = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "Saved_Images")
+        self.source_dir = os.path.join(self.base_dir)
+        self.dest_dir = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState")
         self.monitor_timer = QTimer()
         self.monitor_timer.timeout.connect(self.img_monitor_transfer)
         
@@ -39,6 +52,8 @@ class BackendHardwareTest(QMainWindow):
         self.init_ui()
 
     def db_execute(self, query, params=(), fetch=False):
+        if not self.db_path: 
+            return None
         try:
             with sqlite3.connect(self.db_path, timeout=20) as conn:
                 conn.execute("PRAGMA journal_mode=WAL;")
@@ -56,11 +71,11 @@ class BackendHardwareTest(QMainWindow):
         if new_path:
             if folder_type == "src":
                 # Keeps "Source_Images" but changes the parent path
-                self.source_dir = os.path.join(new_path, "Source_Images")
+                self.source_dir = os.path.join(new_path)
                 self.src_input.setText(self.source_dir)
             else:
                 # Keeps "Saved_Images" but changes the parent path
-                self.dest_dir = os.path.join(new_path, "Saved_Images")
+                self.dest_dir = os.path.join(new_path)
                 self.dst_input.setText(self.dest_dir)
                 
             self.terminals["mega_bridge"].appendPlainText(f"[CONFIG] Path updated to new path: {new_path}")
@@ -418,18 +433,18 @@ class BackendHardwareTest(QMainWindow):
         self.db_execute("UPDATE control SET state=0, feeder=0, xray=0 WHERE id=1")
         # self.manual_reset()\
 
-        if os.path.exists(self.source_dir):
-            try:
-                for f in os.listdir(self.source_dir):
-                    f_path = os.path.join(self.source_dir, f)
-                    # Only delete if it's a file, not a subdirectory
-                    if os.path.isfile(f_path): 
-                        os.remove(f_path)
-                        self.terminals["mega_bridge"].appendPlainText("Source directory cleared.")
+        # if os.path.exists(self.source_dir):
+        #     try:
+        #         for f in os.listdir(self.source_dir):
+        #             f_path = os.path.join(self.source_dir, f)
+        #             # Only delete if it's a file, not a subdirectory
+        #             if os.path.isfile(f_path): 
+        #                 os.remove(f_path)
+        #         self.terminals["mega_bridge"].appendPlainText("Source directory cleared.")
     
-            except Exception as e:
-                self.terminals["mega_bridge"].appendPlainText(f"Error clearing source: {e}")
-                
+        #     except Exception as e:
+        #         self.terminals["mega_bridge"].appendPlainText(f"Error clearing source: {e}")
+
         for p in self.active_processes: p.kill()
         self.active_processes = []
         self.test_btn.setText("START TESTING")
