@@ -4,9 +4,21 @@ import time
 import os
 
 # --- CONFIGURATION ---
+def get_db_path():
+    config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                lines = f.read().splitlines()
+                if len(lines) >= 7 and lines[6].strip():
+                    return lines[6].strip()
+        except Exception:
+            pass
+    return ""
 local_app_data = os.environ.get('LOCALAPPDATA')
 package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
-DB_PATH = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+# DB_PATH = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+DB_PATH = get_db_path()
 # Absolute path to the LocalState folder
 CMD_FILE = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "mega_cmd.txt")
 
@@ -28,6 +40,9 @@ BRIDGE_PORT = get_config_port(1, "COM7")
 BAUD = 9600
 
 def db_query(query, params=(), fetch=False):
+    current_db = get_db_path() # Check if path changed while running
+    if not current_db:
+        return None
     try:
         with sqlite3.connect(DB_PATH, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
@@ -53,7 +68,7 @@ def db_query(query, params=(), fetch=False):
 def run_bridge():
     try:
         ser = serial.Serial(BRIDGE_PORT, BAUD, timeout=0.1)
-        print(f"Bridge Active on {BRIDGE_PORT}. Polling Arduino...")
+        print(f"---Virtual Arduino Mega Bridge Active on {BRIDGE_PORT}---")
     except Exception as e:
         print(f"Error: {e}")
         return

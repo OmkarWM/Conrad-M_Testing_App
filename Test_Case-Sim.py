@@ -11,9 +11,20 @@ class TestCaseSimulator(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        local_app_data = os.environ.get('LOCALAPPDATA')
-        package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
-        self.db_path = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+        # local_app_data = os.environ.get('LOCALAPPDATA')
+        # package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
+        # self.db_path = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+        def get_db_path():
+            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
+            if os.path.exists(config_file):
+                with open(config_file, "r") as f:
+                    lines = f.read().splitlines()
+                    if len(lines) >= 7:
+                        return lines[6]
+            return None
+
+        self.db_path = get_db_path()
+        print(f"Using database at: {self.db_path}")
         
         self.phase = "READY" 
         self.is_sim_active = False 
