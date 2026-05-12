@@ -33,7 +33,7 @@ class XraySimulator:
 
         try:
             self.ser = serial.Serial(PORT, BAUD, timeout=0.1)
-            print(f"--- X-Ray Controller Simulator Active on {PORT} ---")
+            print(f"--- Virtual X-Ray Controller Active on {PORT} ---")
         except Exception as e:
             print(f"ERROR: {e}")
             sys.exit()
