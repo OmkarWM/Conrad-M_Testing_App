@@ -47,6 +47,7 @@ class MasterLauncher(QMainWindow):
         db_input_row = QHBoxLayout()
         self.db_path_edit = QLineEdit()
         self.db_path_edit.setReadOnly(True)
+        self.load_config()
         self.db_path_edit.setPlaceholderText("Select Database File...")
         self.db_path_edit.setStyleSheet("background: #2d2d2d; color: #fff; padding: 5px; border: 1px solid #444;")
         
@@ -98,6 +99,7 @@ class MasterLauncher(QMainWindow):
 
         layout.addWidget(config_box)
         self.save_ports_to_txt() # Initial save on startup
+        
 
     def save_ports_to_txt(self):
         """Writes all 6 ports to a text file in a strict order."""
@@ -196,6 +198,25 @@ class MasterLauncher(QMainWindow):
             self.db_path_edit.setText(file_path)
             self.save_ports_to_txt()
 
+    def load_config(self):
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, "r") as f:
+                    lines = f.read().splitlines()
+                    
+                # Check if we have the 7th line
+                if len(lines) >= 7:
+                    saved_path = lines[6].strip()
+                    self.db_path_edit.setText(saved_path)
+                    print(f"Successfully loaded DB path: {saved_path}")
+                else:
+                    print("Config file found, but DB path line is missing.")
+                    
+            except Exception as e:
+                print(f"Error loading config: {e}")
+        else:
+            print("No config file found to load.")
+        
 
 if __name__ == "__main__":
     app = QApplication(sys.argv); win = MasterLauncher(); win.show(); sys.exit(app.exec())
