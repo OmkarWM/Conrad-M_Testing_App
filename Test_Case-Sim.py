@@ -82,7 +82,7 @@ class TestCaseSimulator(QMainWindow):
         except Exception: return None
 
     def init_ui(self):
-        self.setWindowTitle("System Control - Dark Edition")
+        self.setWindowTitle("Front-End Testing GUI")
         self.setFixedSize(450, 420)
         menubar = self.menuBar()    
               

@@ -8,7 +8,7 @@ from PyQt6.QtGui import QAction
 class BackendHardwareTest(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Backend-Testing GUI")
+        self.setWindowTitle("Back-End-Testing GUI")
         self.setFixedSize(1400, 900)
 
         def get_db_path():
