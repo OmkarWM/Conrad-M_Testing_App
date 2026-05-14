@@ -1,0 +1,17 @@
+# Virtual Environment
+venv/
+.venv/
+
+# PyInstaller build folders
+build/
+dist/
+
+# Python internals
+__pycache__/
+*.pyc
+
+# Local hardware configs and data
+port_config.txt
+mega_cmd.txt
+fault_state.txt
+*.sqlite

@@ -1,4 +1,4 @@
-import sys, os, sqlite3, shutil, time
+import sys, os, sqlite3, shutil, time, multiprocessing
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QGridLayout, QPushButton, QLabel, 
                              QFrame, QPlainTextEdit, QMenu, QFileDialog, QLineEdit)
@@ -27,9 +27,10 @@ class BackendHardwareTest(QMainWindow):
         self.package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
         # self.db_path = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "db.sqlite")
         self.db_path = get_db_path()
-        self.cmd_file = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState", "mega_cmd.txt")
+      
         #default path
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.cmd_file = os.path.join( self.base_dir, "mega_cmd.txt")
         self.source_dir = os.path.join(self.base_dir)
         self.dest_dir = os.path.join(self.local_app_data, "Packages", self.package_folder, "LocalState")
         self.monitor_timer = QTimer()
@@ -457,6 +458,7 @@ class BackendHardwareTest(QMainWindow):
             btn.setStyleSheet("background-color:#334155; color:white; border-radius:15px; font-weight:bold;")
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = QApplication(sys.argv)
     window = BackendHardwareTest()
     window.show()

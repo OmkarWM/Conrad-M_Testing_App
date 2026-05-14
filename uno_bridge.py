@@ -1,13 +1,17 @@
-import serial, os
+import serial, os, sys, multiprocessing
 import time
 import random
 
 # --- CONFIGURATION ---
+def get_base_path():
+    if getattr(sys, 'frozen', False): return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
 def get_config_port(line_index, default_fallback):
     try:
         # Get the path of the script directory
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(base_path, "port_config.txt")
+        # base_path = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(get_base_path(), "port_config.txt")
         
         with open(config_path, "r") as f:
             lines = f.readlines()
@@ -38,4 +42,5 @@ def run_bridge():
         time.sleep(0.5) 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     run_bridge()

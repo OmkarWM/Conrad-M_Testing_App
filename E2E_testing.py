@@ -1,4 +1,4 @@
-import sys, os, sqlite3, shutil, time
+import sys, os, sqlite3, shutil, time, multiprocessing
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QGridLayout, QPushButton, QLabel, 
@@ -30,7 +30,7 @@ class ModularTestingBench(QMainWindow):
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         
         # Communication files for the bridge and local fault tracking
-        self.cmd_file = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "mega_cmd.txt")
+        self.cmd_file = os.path.join(self.base_dir, "mega_cmd.txt")
         self.state_file = os.path.join(self.base_dir, "fault_state.txt")
         
         self.source_dir = os.path.join(self.base_dir)
@@ -342,6 +342,7 @@ class ModularTestingBench(QMainWindow):
     def stop_all_testing(self):
         # Shutdown sequence for the bench
         self.is_sim_active = False
+        self.stream_engine.stop()
         
         # Check if we have any active faults stored in our text file
         if os.path.exists(self.state_file):
@@ -467,4 +468,5 @@ class ModularTestingBench(QMainWindow):
         except: return None
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = QApplication(sys.argv); window = ModularTestingBench(); window.show(); sys.exit(app.exec())

@@ -1,4 +1,4 @@
-import sys
+import sys, multiprocessing
 import sqlite3
 import os
 import random
@@ -7,23 +7,28 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QLabel, QFrame)
 from PyQt6.QtCore import QTimer, Qt
 
+def get_base_path():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def get_db_path():
+    config_file = os.path.join(get_base_path(), "port_config.txt")
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            lines = f.read().splitlines()
+            if len(lines) >= 7:
+                return lines[6]
+    return None
+
 class TestCaseSimulator(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.db_path = get_db_path()
         
         # local_app_data = os.environ.get('LOCALAPPDATA')
         # package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
         # self.db_path = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
-        def get_db_path():
-            config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
-            if os.path.exists(config_file):
-                with open(config_file, "r") as f:
-                    lines = f.read().splitlines()
-                    if len(lines) >= 7:
-                        return lines[6]
-            return None
-
-        self.db_path = get_db_path()
         print(f"Using database at: {self.db_path}")
         
         self.phase = "READY" 
@@ -246,6 +251,7 @@ class TestCaseSimulator(QMainWindow):
                 self.lbl_status.setText(f"RUNNING: {ts}")
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = QApplication(sys.argv)
     window = TestCaseSimulator()
     window.show()

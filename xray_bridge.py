@@ -1,18 +1,21 @@
-import serial, sys
+import serial, sys, multiprocessing
 import time
 import os
 import random
 
 # --- CONFIGURATION ---
-local_app_data = os.environ.get('LOCALAPPDATA')
-package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
-DB_PATH = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+# local_app_data = os.environ.get('LOCALAPPDATA')
+# package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
+# DB_PATH = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+def get_base_path():
+    if getattr(sys, 'frozen', False): return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
 def get_config_port(line_index, default_fallback):
     try:
         # Get the path of the script directory
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(base_path, "port_config.txt")
+        # base_path = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(get_base_path(), "port_config.txt")
         
         with open(config_path, "r") as f:
             lines = f.readlines()
@@ -78,4 +81,5 @@ def run_xray_bridge():
             print(f"\nError: {e}"); break
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     run_xray_bridge()

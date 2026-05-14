@@ -1,10 +1,18 @@
-import sys
+import sys, multiprocessing
 import os
 import subprocess
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, 
                              QVBoxLayout, QPushButton, QLabel, QFrame, QHBoxLayout, 
                              QComboBox, QGridLayout, QFileDialog, QLineEdit)
 from PyQt6.QtCore import QTimer
+import traceback
+def get_base_path():
+    if getattr(sys, 'frozen', False):
+        # Running as EXE: base is the folder containing the .exe
+        return os.path.dirname(sys.executable)
+    # Running as Script: base is the folder containing the .py
+    return os.path.dirname(os.path.abspath(__file__))
+
 
 class MasterLauncher(QMainWindow):
     def __init__(self):
@@ -12,8 +20,10 @@ class MasterLauncher(QMainWindow):
         self.setWindowTitle("Industrial Test Console")
         self.setFixedSize(550, 480)
         
-        # Path for the shared configuration file
-        self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
+        # # Path for the shared configuration file
+        # self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
+        self.config_path = os.path.join(get_base_path(), "port_config.txt")
+        print(self.config_path)
         
         self.active_process = None
         self.is_any_module_running = False
@@ -145,6 +155,7 @@ class MasterLauncher(QMainWindow):
         return tab
 
     def handle_module(self, title, name, msg_label, dot_label, current_btn):
+        
         if self.is_any_module_running and current_btn.text().startswith("STOP"):
             if self.active_process: self.active_process.terminate()
             return
@@ -152,10 +163,14 @@ class MasterLauncher(QMainWindow):
         if not self.is_any_module_running:
             try:
                 # Ensure the file is updated one last time before launch
+                app_root = get_base_path()
+                script_path = os.path.join(app_root, name)               
                 self.save_ports_to_txt()
-                
-                # Launch script without any arguments
-                self.active_process = subprocess.Popen([sys.executable, name])
+                self.active_process = subprocess.Popen(
+                    ["pythonw",  script_path],
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                                
                 self.is_any_module_running = True
                 
                 msg_label.setText(f"{title} Test is Running")
@@ -168,8 +183,9 @@ class MasterLauncher(QMainWindow):
                     if b != current_btn: b.setEnabled(False)
                 self.monitor_timer.start(500)
 
-            except:
+            except Exception as ex:
                 msg_label.setText("Launch Error")
+                print(traceback.format_exc())
 
     
     def check_process_status(self):
@@ -219,4 +235,5 @@ class MasterLauncher(QMainWindow):
         
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = QApplication(sys.argv); win = MasterLauncher(); win.show(); sys.exit(app.exec())
