@@ -1,4 +1,4 @@
-import sys, multiprocessing
+import sys, multiprocessing, time
 import sqlite3
 import os
 import random
@@ -153,19 +153,24 @@ class TestCaseSimulator(QMainWindow):
         main_layout.addWidget(self.btn_power)
         self.update_ui("SIMULATOR: OFF", "Press Power ON to start", color="gray")
 
+    
+
     def toggle_power(self):
         if not self.is_sim_active:
             self.is_sim_active = True
             self.phase = "READY"
             self.btn_power.setText("Power OFF Simulator")
             self.btn_power.setStyleSheet("background-color: #e63946;")
-            self.db_execute("UPDATE control SET status='Welcome', dialog=0, state=0, pls_wait=0, mains=1, door=0, flid=0, blid=0, warning=0, calib=0, feeder=0")
+            self.db_execute("UPDATE control SET dialog=0, state=0, pls_wait=0, mains=1, door=0, flid=0, blid=0, warning=0, calib=0, feeder=0")
             self.update_ui("SIMULATOR: ON", "SIMULATOR ACTIVE: Running...")
         else:
-            self.is_sim_active = False
-            self.btn_power.setText("Power ON Simulator")
-            self.btn_power.setStyleSheet("")
-            self.update_ui("SIMULATOR: OFF", "Press Power ON to start", color="gray")
+            self.stop_power()
+
+    def stop_power(self):
+        self.is_sim_active = False
+        self.btn_power.setText("Power ON Simulator")
+        self.btn_power.setStyleSheet("")
+        self.update_ui("SIMULATOR: OFF", "Press Power ON to start", color="gray")
 
     def run_logic(self):
         s_active = self.is_sim_active
@@ -223,11 +228,12 @@ class TestCaseSimulator(QMainWindow):
         self.db_execute("UPDATE control SET main_hb=? WHERE id=1", (ts,))
 
         if self.phase == "READY":
-            if dialog == 1:
-                self.phase = "DIALOG"
-                self.update_ui("DIALOG ACTIVE", "SIMULATOR ACTIVE: Running...")
-            else:
-                self.update_ui("READY: Waiting for User to Press START", self.lbl_logic.text())
+            # if dialog == 1:
+            self.db_execute("UPDATE control SET dialog=1 WHERE id=1")
+            self.phase = "DIALOG"
+            self.update_ui("DIALOG ACTIVE", "SIMULATOR ACTIVE: Running...")
+        # else:
+            #     self.update_ui("READY: Waiting for User to Press START", self.lbl_logic.text())
 
         elif self.phase == "DIALOG":           
             if state == 1:
@@ -239,16 +245,20 @@ class TestCaseSimulator(QMainWindow):
                 self.db_execute("UPDATE control SET pls_wait=1, dialog=0 WHERE id=1")
             elif dialog == 0:
                 self.phase = "READY"
+                self.stop_power()
                 self.db_execute("UPDATE control SET status='Welcome'")
                 
         elif self.phase == "RUNNING":
             if state == 0:               
-                self.phase = "READY"
-                self.db_execute("UPDATE control SET status='Welcome',mains=1,temperature=0")
-                self.db_execute("UPDATE machineStatus set x_ray='OFF'")
+                self.phase = "READY" 
+                self.db_execute("UPDATE control SET status= 'Stopping Machine...' WHERE id=1") 
+                time.sleep(2)       
+                self.db_execute("UPDATE control SET status='Welcome',mains=1,temperature=0, temp=1")
+                # self.db_execute("UPDATE machineStatus set x_ray='OFF'")
+                self.stop_power()
             else:
                 self.db_execute("UPDATE control SET main_hb=? WHERE id=1", (ts,))
-                self.lbl_status.setText(f"RUNNING: {ts}")
+                self.lbl_status.setText(f"RUNNING: {ts}")   
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()

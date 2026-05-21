@@ -1,4 +1,9 @@
-import sys, os, sqlite3, shutil, time, multiprocessing
+import sys
+import os
+import sqlite3
+import shutil
+import time
+import multiprocessing
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QGridLayout, QPushButton, QLabel, 
@@ -15,7 +20,7 @@ class ModularTestingBench(QMainWindow):
         # Setup paths for the Windows App Package environment
         local_app_data = os.environ.get('LOCALAPPDATA', '')
         package_folder = "1b93a6a9-009e-4781-8c7b-31643d1c1f3b_zzsj02r91hwve"
-        # self.db_path = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")
+        # self.db_path = os.path.join(local_app_data, "Packages", package_folder, "LocalState", "db.sqlite")       
         def get_db_path():
             config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_config.txt")
             if os.path.exists(config_file):
@@ -27,21 +32,23 @@ class ModularTestingBench(QMainWindow):
 
         self.db_path = get_db_path()
         print(f"Using database at: {self.db_path}")
-        self.base_dir = os.path.dirname(os.path.abspath(__file__))
-        
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))   
+        self.db_conn = sqlite3.connect(self.db_path, timeout=30)
+        self.db_conn.execute("PRAGMA journal_mode=WAL;")
+        self.db_conn.execute("PRAGMA synchronous=NORMAL;")    
         # Communication files for the bridge and local fault tracking
         self.cmd_file = os.path.join(self.base_dir, "mega_cmd.txt")
-        self.state_file = os.path.join(self.base_dir, "fault_state.txt")
+        # self.state_file = os.path.join(self.base_dir, "fault_state.txt")
         
         self.source_dir = os.path.join(self.base_dir)
         self.dest_dir = os.path.join(local_app_data, "Packages", package_folder, "LocalState")
-        self.index = 0
+        self.index = 0        
         # Initializing core state variables
         self.phase = "READY"
         self.is_sim_active = False
         self.ses_id = 0        
         self.good, self.bad, self.forced_good = 0, 0, 0
-        # self.copied_files = []
+        # self.copied_files = []       
         self.active_processes = []
         self.terminals = {}
 
@@ -88,61 +95,78 @@ class ModularTestingBench(QMainWindow):
         main_layout.setSpacing(0)
 
         # Left panel: System controls
-        rack = QFrame(); rack.setObjectName("ControlRack"); rack.setFixedWidth(400)
+        rack = QFrame()
+        rack.setObjectName("ControlRack")
+        rack.setFixedWidth(400)
         rack_lay = QVBoxLayout(rack)
         
         rack_lay.addWidget(QLabel("SYSTEM PHASE"))
-        self.lbl_phase = QLabel("OFFLINE"); self.lbl_phase.setObjectName("Value")
+        self.lbl_phase = QLabel("OFFLINE")
+        self.lbl_phase.setObjectName("Value")
         rack_lay.addWidget(self.lbl_phase)
         
         rack_lay.addSpacing(20)
-        self.test_btn = QPushButton("START TESTING"); self.test_btn.setObjectName("StartBtn")
-        self.test_btn.setFixedHeight(70); self.test_btn.clicked.connect(self.toggle_testing)
+        self.test_btn = QPushButton("START TESTING")
+        self.test_btn.setObjectName("StartBtn")
+        self.test_btn.setFixedHeight(70)
+        self.test_btn.clicked.connect(self.toggle_testing)
         rack_lay.addWidget(self.test_btn)
 
-        self.clear_btn = QPushButton("CLEAR LOGS"); self.clear_btn.clicked.connect(self.clear_all_logs)
+        self.clear_btn = QPushButton("CLEAR LOGS")
+        self.clear_btn.clicked.connect(self.clear_all_logs)
         rack_lay.addWidget(self.clear_btn)
 
         rack_lay.addStretch()
 
         # Path management UI
         rack_lay.addWidget(QLabel("SOURCE FOLDER"))
-        self.src_in = QLineEdit(self.source_dir); self.src_in.setReadOnly(True)
+        self.src_in = QLineEdit(self.source_dir)
+        self.src_in.setReadOnly(True)
         rack_lay.addWidget(self.src_in)
-        btn_path = QPushButton("BROWSE SOURCE "); btn_path.clicked.connect(self.select_source_path)
+        btn_path = QPushButton("BROWSE SOURCE ")
+        btn_path.clicked.connect(self.select_source_path)
         rack_lay.addWidget(btn_path)
 
         rack_lay.addSpacing(20) 
         rack_lay.addWidget(QLabel("DESTINATION  FOLDER"))
-        self.dest_in = QLineEdit(self.dest_dir); self.dest_in.setReadOnly(True)
+        self.dest_in = QLineEdit(self.dest_dir)
+        self.dest_in.setReadOnly(True)
         rack_lay.addWidget(self.dest_in)
-        btn_path = QPushButton("BROWSE DESTINATION "); btn_path.clicked.connect(self.select_dest_path)
+        btn_path = QPushButton("BROWSE DESTINATION ")
+        btn_path.clicked.connect(self.select_dest_path)
         rack_lay.addWidget(btn_path)
 
         rack_lay.addSpacing(20) 
-        btn_fault = QPushButton("INJECT SYSTEM FAULT"); btn_fault.setObjectName("Fault")
+        btn_fault = QPushButton("INJECT SYSTEM FAULT")
+        btn_fault.setObjectName("Fault")
         btn_fault.setMenu(self.create_fault_menu())
         rack_lay.addWidget(btn_fault)
 
         # Right panel: Real-time terminal data
-        data_rack = QFrame(); data_rack.setObjectName("DataRack")
+        data_rack = QFrame()
+        data_rack.setObjectName("DataRack")
         data_lay = QVBoxLayout(data_rack)
         
         grid = QGridLayout()
         nodes = [("MEGA", "mega"), ("X-RAY", "xray"), ("UNO", "uno")]
         for row, (name, key) in enumerate(nodes):
             for col, n_type in enumerate(["BRIDGE", "SERIAL"]):
-                v = QVBoxLayout(); v.addWidget(QLabel(f"{name} :: {n_type}"))
-                t = QPlainTextEdit(); t.setReadOnly(True)
+                v = QVBoxLayout()
+                v.addWidget(QLabel(f"{name} :: {n_type}"))
+                t = QPlainTextEdit()
+                t.setReadOnly(True)
                 self.terminals[f"{key}_{n_type.lower()}"] = t
-                v.addWidget(t); grid.addLayout(v, row, col)
+                v.addWidget(t)
+                grid.addLayout(v, row, col)
         
         data_lay.addLayout(grid, 7)
         data_lay.addWidget(QLabel("SYSTEM EVENT STREAM"))
-        self.master_log = QPlainTextEdit(); self.master_log.setFixedHeight(180)
+        self.master_log = QPlainTextEdit()
+        self.master_log.setFixedHeight(180)
         data_lay.addWidget(self.master_log, 3)
 
-        main_layout.addWidget(rack); main_layout.addWidget(data_rack)
+        main_layout.addWidget(rack)
+        main_layout.addWidget(data_rack)
 
     def toggle_testing(self):
         # Switching between testing and standby modes
@@ -153,13 +177,13 @@ class ModularTestingBench(QMainWindow):
             # Resetting DB to clean start state
             self.db_execute("""
                 UPDATE control SET 
-                status='Welcome', dialog=0, state=0, mains=1, 
+                dialog=0, state=0, mains=1, 
                 door=0, flid=0, blid=0, warning=0, calib=0, feeder=0 WHERE id=1
             """)
             
             # Wipe existing fault file if it exists to prevent old bugs from carrying over
-            if os.path.exists(self.state_file):
-                os.remove(self.state_file)
+            # if os.path.exists(self.state_file):
+            #     os.remove(self.state_file)
 
             self.test_btn.setText("STOP TESTING")
             self.test_btn.setStyleSheet("background-color: #ef4444; color: white; border-radius: 8px; font-weight: 900;")
@@ -172,36 +196,45 @@ class ModularTestingBench(QMainWindow):
 
     def run_logic_cycle(self):
         # This handles the internal state machine and HMI interaction
-        if not self.is_sim_active: return
+        if not self.is_sim_active: 
+            return
 
         row = self.db_execute("SELECT dialog, state FROM control WHERE id=1", fetch=True)
-        if not row: return
-        dialog, state  = row
+        if not row: 
+            return
+            
+        dialog, state = row
 
         # Waiting for the user to confirm the HMI setup dialog
-        if self.phase == "READY" and dialog == 1:
+        if self.phase == "READY":
+            self.db_execute("UPDATE control SET dialog=1 WHERE id=1")
             self.phase = "DIALOG"
             self.log("HMI Prompt: Summary Dialog Active.")
         
         # Once HMI starts running, we find the latest session ID and start simulation
-        elif self.phase == "DIALOG" and state == 1:
-            self.phase = "RUNNING"
-            res_ses = self.db_execute("SELECT MAX(ses) FROM machineStatus", fetch=True)
-            self.ses_id = res_ses[0] if (res_ses and res_ses[0] is not None) else 1
-            # self.copied_files = []
-            self.index = 0
-            self.good, self.bad, self.forced_good = 0, 0, 0
-            self.db_execute("UPDATE control SET pls_wait=1, dialog=0 WHERE id=1")
-            self.stream_engine.start(400)
-            self.log(f"Session {self.ses_id} Activated.")
+        elif self.phase == "DIALOG":
+            if state == 1:
+                self.phase = "RUNNING"
+                res_ses = self.db_execute("SELECT MAX(ses) FROM machineStatus", fetch=True)
+                self.ses_id = res_ses[0] if (res_ses and res_ses[0] is not None) else 1
+                # self.copied_files = []           
+                self.index = 0
+                self.good, self.bad, self.forced_good = 0, 0, 0            
+                self.db_execute("UPDATE control SET pls_wait=1, dialog=0 WHERE id=1")
+                self.stream_engine.start(400)
+                self.log(f"Session {self.ses_id} Activated.")
+            elif dialog == 0:
+                self.stop_all_testing()
 
         # Reverting to ready if the machine stops
-        elif self.phase == "RUNNING":
-            if state == 0:
-                self.phase = "READY"
-                self.stream_engine.stop()
-                self.db_execute("UPDATE control SET status='Welcome', mains=1")
-                self.log("Session Terminated by User.")
+        # elif self.phase == "RUNNING":
+        #     if state == 0:
+        #         #         # self.phase = "READY"
+        #         self.stream_engine.stop()
+        #         # self.db_execute("UPDATE control SET status='Welcome', mains=1")
+        #         self.resetUI()
+
+                # self.log("Session Terminated by User.")
             
         self.lbl_phase.setText(self.phase)
         
@@ -219,14 +252,14 @@ class ModularTestingBench(QMainWindow):
                 time.sleep(0.001)
                 if os.path.exists(os.path.join(self.source_dir, filename + ".tif")):
                     shutil.copy(os.path.join(self.source_dir, filename + ".tif"), os.path.join(self.dest_dir, filename + ".tif"))
-                    self.log(f"Simulated IO: {filename+ ".tif"} transferred.")
+                    self.log(f"Simulated IO: {filename}.tif transferred.")
                     self.index += 1
 
             # if files:
             #     f = files[0]
             #     shutil.copy(os.path.join(self.source_dir, f), os.path.join(self.dest_dir, f))
             #     self.copied_files.append(f) 
-            
+
         except Exception as e:
             self.log(f"Stream Error: {e}")
             self.stop_all_testing()
@@ -250,13 +283,16 @@ class ModularTestingBench(QMainWindow):
     def handle_output(self, proc, script):
         # Main data handler for information coming back from bridges
         data = proc.readAllStandardOutput().data().decode().strip()
-        if not data: return
+        if not data: 
+            return
         
         if script in self.process_map:
             self.terminals[self.process_map[script]].appendPlainText(data)
 
         # Emergency stop if Mega reports an offline state
         if script == "test_Mega.py":
+            if "stopping machine" in data.lower():
+                self.db_execute("UPDATE control SET status= 'Stopping Machine...' WHERE id=1") 
             if "offline" in data.lower():
                 self.stop_all_testing()
                 return
@@ -276,7 +312,8 @@ class ModularTestingBench(QMainWindow):
                             self.db_execute("UPDATE control SET xray=1 WHERE id=1")
                             self.start_scripts(["xray_bridge.py", "test_Xray.py"])
                     else:
-                        self.kill_script("xray_bridge.py"); self.kill_script("test_Xray.py")
+                        self.kill_script("xray_bridge.py")
+                        self.kill_script("test_Xray.py")
                     
                     # Logic for the Uno node (Rejecter/Sensor)        
                     if res[1] == 1:
@@ -286,7 +323,8 @@ class ModularTestingBench(QMainWindow):
                     else:
                         self.db_execute("UPDATE machineStatus SET feeder='OFF' WHERE ses=?", (self.ses_id,))
                         if len(bits) > 4 and bits[4] == "0":
-                            self.kill_script("uno_bridge.py"); self.kill_script("test_Uno.py")
+                            self.kill_script("uno_bridge.py")
+                            self.kill_script("test_Uno.py")
                 else:
                     # Cleanup if system is not in a running state
                     self.db_execute("UPDATE machineStatus SET x_ray='OFF', camera='OFF', conveyor='OFF', feeder='OFF' WHERE ses=?", (self.ses_id,))
@@ -295,7 +333,7 @@ class ModularTestingBench(QMainWindow):
                     self.kill_script("test_Xray.py")
                     self.kill_script("uno_bridge.py")
                     self.kill_script("test_Uno.py")
-            except: 
+            except Exception as e:
                 pass
 
         # Parsing radiation data from X-Ray simulator
@@ -309,7 +347,8 @@ class ModularTestingBench(QMainWindow):
                     self.db_execute("UPDATE control SET temperature=? WHERE id=1", (str(temp_val),))
                     xray_display = f"ON | {kv_val}kV {ma_val}mA"                    
                     self.db_execute("UPDATE machineStatus SET x_ray=? WHERE ses=?", (xray_display, self.ses_id))
-            except: pass
+            except Exception as e:
+                pass
 
         # Counting good/bad items based on Uno bridge output
         if script == "uno_bridge.py" and "[BRIDGE]:" in data:
@@ -318,13 +357,19 @@ class ModularTestingBench(QMainWindow):
                 hex_str = parts[1].strip().split()[0]
                 hex_val = int(hex_str, 16)
                 res = self.db_execute("SELECT state, feeder, sensitivity FROM control WHERE id=1", fetch=True)
-                if hex_val == 0xA1: self.good += 1 
-                elif hex_val == 0xB1 and res and res[2] == 0: self.bad += 1 
-                elif hex_val == 0xF1 and res and res[2] == 0: self.forced_good += 1 
+                
+                if hex_val == 0xA1: 
+                    self.good += 1 
+                elif hex_val == 0xB1 and res and res[2] == 0: 
+                    self.bad += 1 
+                elif hex_val == 0xF1 and res and res[2] == 0: 
+                    self.forced_good += 1 
+                    
                 total = self.good + self.bad + self.forced_good
                 self.db_execute("UPDATE machineStatus SET good=?, bad=?, forced_good=?, total=? WHERE ses=?",
                     (self.good, self.bad, self.forced_good, total, self.ses_id))
-            except: pass
+            except Exception as e: 
+                pass
 
     def update_devices_from_bits(self, bits):
         # Maps binary sensor data to visual status strings in the DB
@@ -333,34 +378,40 @@ class ModularTestingBench(QMainWindow):
             c_status = "ON" if bits[1] == "1" else "OFF"
             v_status = "ON" if bits[3] == "1" else "OFF"
             res = self.db_execute("SELECT x_ray FROM machineStatus WHERE ses=?", (self.ses_id,), fetch=True)
-            if res and res[0] and "ON |" in str(res[0]) and x_status == "ON": x_status = res[0]
+            if res and res[0] and "ON |" in str(res[0]) and x_status == "ON": 
+                x_status = res[0]
+                
             self.db_execute("UPDATE machineStatus SET x_ray=?, camera=?, conveyor=? WHERE ses=?",
                 (x_status, c_status, v_status, self.ses_id))
+                
             row = self.db_execute("SELECT feeder FROM control WHERE id=1", fetch=True)
-            if row and row[0] == 1: self.db_execute("UPDATE control SET feeder=1 WHERE id=1")
+            if row and row[0] == 1: 
+                self.db_execute("UPDATE control SET feeder=1 WHERE id=1")
                 
     def stop_all_testing(self):
         # Shutdown sequence for the bench
         self.is_sim_active = False
         self.stream_engine.stop()
+        QTimer.singleShot(2000,self.resetUI)
+        
         
         # Check if we have any active faults stored in our text file
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, "r") as f:
-                    for line in f:
-                        if ":" in line:
-                            col, val = line.strip().split(":")
-                            # Force the DB to keep the fault state even after halt
-                            self.db_execute(f"UPDATE control SET {col}=? WHERE id=1", (val,))
-                
-                # Trash the file so we don't double-read it next time
-                os.remove(self.state_file)
-            except Exception as e:
-                self.log(f"Error handling state file: {e}")
+        # if os.path.exists(self.state_file):
+        #     try:
+        #         with open(self.state_file, "r") as f:
+        #             for line in f:
+        #                 if ":" in line:
+        #                     col, val = line.strip().split(":")
+        #                     # Force the DB to keep the fault state even after halt
+        #                     self.db_execute(f"UPDATE control SET {col}=? WHERE id=1", (val,))
+        #         
+        #         # Trash the file so we don't double-read it next time
+        #         os.remove(self.state_file)
+        #     except Exception as e:
+        #         self.log(f"Error handling state file: {e}")
 
         self.db_execute("UPDATE control SET temperature=0, xray=0 WHERE id=1")
-        self.db_execute("UPDATE machineStatus SET x_ray='OFF', camera='OFF', conveyor='OFF', feeder='OFF' WHERE ses=?", (self.ses_id,))
+        # self.db_execute("UPDATE machineStatus SET x_ray='OFF', camera='OFF', conveyor='OFF', feeder='OFF' WHERE ses=?", (self.ses_id,))
 
         # if os.path.exists(self.source_dir):
         #     try:
@@ -374,14 +425,24 @@ class ModularTestingBench(QMainWindow):
         #         self.log(f"Error clearing source: {e}")
         
         # Kill all running bridges
-        for p in self.active_processes: p.kill()
+        for p in self.active_processes: 
+            p.kill()
         self.active_processes = []
         
         # UI cleanup
+
         self.test_btn.setText("START TESTING")
         self.test_btn.setStyleSheet("background-color: #10b981; color: #020617; border-radius: 8px; font-weight: 900;")
         self.lbl_phase.setText("OFFLINE")
-        self.log("Testing Halted: System Powered Off") 
+        # self.log("Testing Halted: System Powered Off") 
+        self.log("Session Terminated by User.")
+
+    def resetUI(self):
+        # Tuple unpacking fixed here
+        row = self.db_execute("SELECT state FROM control WHERE id=1", fetch=True)
+        if row and row[0] == 0:
+
+            self.db_execute("UPDATE control SET status='Welcome', mains=1, temp=1 WHERE id=1")
 
     def create_fault_menu(self):
         # Menu for choosing which hardware fault to simulate
@@ -400,42 +461,36 @@ class ModularTestingBench(QMainWindow):
         return menu
     
     def set_fault(self, pin, value, column, message):
-        # Injects a fault by writing to bridge cmd and saving it to our text file for persistence
-        try:
-            with open(self.cmd_file, "w") as f:
-                f.write(f"setPin {pin} {value}")
-            
-            # Read existing faults into a dict so we can update without overwriting other active faults
-            state_data = {}
-            if os.path.exists(self.state_file):
-                with open(self.state_file, "r") as f:
-                    for line in f:
-                        if ":" in line:
-                            k, v = line.strip().split(":")
-                            state_data[k] = v
-            
-            # Update the specific column and save back to text file
-            state_data[column] = str(value)
-            with open(self.state_file, "w") as f:
-                for k, v in state_data.items(): f.write(f"{k}:{v}\n")
-
-            self.terminals["mega_bridge"].appendPlainText(f"\n[!!!] CRITICAL FAULT: {message}")
-        except: pass
+        self.db_execute(f"UPDATE control SET {column}=? WHERE id=1", (value,))
+        
+        if self.is_sim_active:
+            try:
+                with open(self.cmd_file, "w") as f:
+                    f.write(f"setPin {pin} {value}")
+            except OSError:
+                pass
+        
+        self.log(f"FAULT INJECTED: {message}")
+        if "mega_bridge" in self.terminals:
+            self.terminals["mega_bridge"].appendPlainText(f"\n[!!!] SYSTEM FAULT: {message}")
 
     def clear_all_logs(self):
-        for t in self.terminals.values(): t.clear()
+        for t in self.terminals.values(): 
+            t.clear()
         self.master_log.clear()
 
     def kill_script(self, name):
         # Safely stops a specific named bridge
         for p in self.active_processes[:]:
             if p.property("script") == name:
-                p.kill(); self.active_processes.remove(p)
+                p.kill()
+                self.active_processes.remove(p)
 
-    def log(self, m): self.master_log.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] {m}")
+    def log(self, m): 
+        self.master_log.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] {m}")
 
     def select_source_path(self):
-    # Opens dialog to pick the parent folder
+        # Opens dialog to pick the parent folder
         p = QFileDialog.getExistingDirectory(self, "Select Root", self.base_dir)
         if p: 
             self.source_dir = os.path.join(p)
@@ -460,13 +515,29 @@ class ModularTestingBench(QMainWindow):
 
     def db_execute(self, query, params=(), fetch=False):
         try:
-            with sqlite3.connect(self.db_path, timeout=30) as conn:
-                conn.execute("PRAGMA journal_mode=WAL;")
-                cursor = conn.execute(query, params)
-                conn.commit()
-                return cursor.fetchone() if fetch else None
-        except: return None
+            cursor = self.db_conn.cursor()
+            cursor.execute(query, params)
+            
+            # Only trigger a commit if the database is being modified
+            if query.strip().upper().startswith(("UPDATE", "INSERT", "DELETE")):
+                self.db_conn.commit()
+                
+            result = cursor.fetchone() if fetch else None
+            cursor.close()
+            return result
+        except Exception as e: 
+            self.log(f"DB Action Failed: {e}")
+            return None
+
+    def closeEvent(self, event):
+        # Cleanly shut down the database connection when the UI is closed
+        if hasattr(self, 'db_conn'):
+            self.db_conn.close()
+        event.accept()
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-    app = QApplication(sys.argv); window = ModularTestingBench(); window.show(); sys.exit(app.exec())
+    app = QApplication(sys.argv)
+    window = ModularTestingBench()
+    window.show()
+    sys.exit(app.exec())
